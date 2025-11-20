@@ -83,8 +83,8 @@
         }
         .card-actions {
             margin-top: 10px;
-            display: flex;
-            flex-direction: column;
+            display: grid;
+            grid-template-columns: 1fr 1fr; /* Two equal columns */
             gap: 5px;
         }
 
@@ -160,50 +160,76 @@
 
         function updateUI() {
             userListDiv.innerHTML = '';
-            userCountSpan.textContent = userList.filter(u => !u.isLoggedOff).length; // Only count logged-in users
+            // Count users who are online (not logged off AND not away)
+            userCountSpan.textContent = userList.filter(u => !u.isLoggedOff && !u.isAway).length; 
 
             userList.forEach(user => {
                 const card = document.createElement('div');
                 card.className = 'user-card';
-                // Add a visual indicator for logged-off users
+
+                // Determine main status and card color
+                let statusText;
                 if (user.isLoggedOff) {
+                    statusText = '<span class="red">OFFLINE</span>';
                     card.style.opacity = '0.7';
                     card.style.backgroundColor = '#fce4e4';
+                } else if (user.isAway) {
+                    statusText = '<span style="color: orange; font-weight: bold;">AWAY</span>';
+                    card.style.opacity = '0.8';
+                    card.style.backgroundColor = '#fffbeb';
+                } else {
+                    statusText = '<span class="green">ONLINE</span>';
+                    card.style.opacity = '1';
+                    card.style.backgroundColor = '#fafafa';
                 }
-                
-                const capacity = MAX_CAPACITY - user.workItems.length;
-                const capacityClass = capacity === 0 ? 'red' : (capacity === MAX_CAPACITY ? 'green' : '');
-                const statusText = user.isLoggedOff ? '<span class="red">OFFLINE</span>' : '<span class="green">ONLINE</span>';
+
+                const capacityConsumed = user.workItems.length;
+                const capacityClass = capacityConsumed === MAX_CAPACITY ? 'red' : (capacityConsumed === 0 ? 'green' : '');
                 const latText = user.lastAssignmentTime ? user.lastAssignmentTime.toLocaleTimeString() : 'N/A';
 
-                card.innerHTML = `
+                let cardContent = `
                     <div class="card-header">
                         <h4>${user.name}</h4>
                         ${statusText}
                     </div>
                     <div>
-                        <p>Capacity Left: <span class="${capacityClass}">${capacity}</span> / ${MAX_CAPACITY}</p>
+                        <p>Workload: <span class="${capacityClass}">**${capacityConsumed}**</span> / ${MAX_CAPACITY}</p>
                         <p>Work IDs: <span class="muted">${user.workItems.join(', ') || 'None'}</span></p>
                         <p>Login: ${user.loginDate.toLocaleTimeString()}</p>
                         <p>LAT: ${latText}</p>
                     </div>
-                    <div class="card-actions">
-                `;
-                
-                // Add Logoff/Login and Work buttons based on state
+                    <div class="card-actions"> `; // <-- The card-actions div is OPEN here
+
+                // Render buttons based on state, appending to cardContent
                 if (!user.isLoggedOff) {
-                    // User is ON
-                    card.innerHTML += `<button class="btn-pull" onclick="pullWork(${user.id})">PULL Work ⬅️</button>`;
-                    // --- NEW LOGIC: Button is always visible, disabled if no work ---
+                    // Logged In (Online or Away)
                     const completeDisabled = user.workItems.length === 0 ? 'disabled' : '';
-                    card.innerHTML += `<button class="btn-complete" ${completeDisabled} onclick="completeWork(${user.id})">✅ Complete Work</button>`;
-                    card.innerHTML += `<button class="btn-logoff" onclick="logoffUser(${user.id})">🛑 Log Off</button>`;
+                    const pullDisabled = user.isAway ? 'disabled' : '';
+
+                    // Row 1: PULL and Complete (Always available when logged in)
+                    cardContent += `<button class="btn-pull" ${pullDisabled} onclick="pullWork(${user.id})">PULL Work ⬅️</button>`;
+                    cardContent += `<button class="btn-complete" ${completeDisabled} onclick="completeWork(${user.id})">✅ Complete</button>`;
+
+                    // Row 2: Status Toggles
+                    if (user.isAway) {
+                        // Must provide Log Off and Go Online options
+                        cardContent += `<button class="btn-logoff" onclick="logoffUser(${user.id})">🛑 Log Off</button>`;
+                        cardContent += `<button class="btn-pull" onclick="goOnline(${user.id})">▶️ Go ONLINE</button>`;
+                    } else {
+                        // Must be ONLINE to see Log Off and Go Away
+                        cardContent += `<button class="btn-logoff" onclick="logoffUser(${user.id})">🛑 Log Off</button>`;
+                        cardContent += `<button class="btn-add-user" onclick="goAway(${user.id})">⏸️ Go AWAY</button>`;
+                    }
                 } else {
-                    // User is OFF
-                    card.innerHTML += `<button class="btn-pull" onclick="loginUser(${user.id})">✅ Log Back In</button>`;
+                    // Logged Off
+                    cardContent += `<button class="btn-pull" style="grid-column: span 2;" onclick="loginUser(${user.id})">✅ Log Back In</button>`;
                 }
-                
-                card.innerHTML += `</div>`; // Close card-actions
+
+                // FIX: Close the card-actions div here, at the end of content generation.
+                cardContent += `</div>`; 
+
+                // Assign the completed string to the card's innerHTML just once.
+                card.innerHTML = cardContent;
                 userListDiv.appendChild(card);
             });
 
@@ -214,7 +240,8 @@
                 addUserBtn.disabled = false;
                 addUserBtn.textContent = '➕ Add User';
             }
-            pushWorkBtn.disabled = userList.filter(u => !u.isLoggedOff).length === 0; // Disable PUSH if no one is online
+            // Disable PUSH if no one is online (not logged off AND not away)
+            pushWorkBtn.disabled = userList.filter(u => !u.isLoggedOff && !u.isAway).length === 0; 
         }
 
         // --- User Management ---
@@ -229,7 +256,8 @@
                 loginDate: new Date(),
                 lastAssignmentTime: null, // Null if never assigned work
                 workItems: [], // Array of work IDs
-                isLoggedOff: false
+                isLoggedOff: false,
+                isAway: false // <-- ADD THIS NEW STATUS
             };
             userList.push(newUser);
             logActivity(`**${newUser.name}** has logged in (Simulated Login Date: ${newUser.loginDate.toLocaleTimeString()}).`);
@@ -240,9 +268,14 @@
 
         function logoffUser(userId) {
             const user = userList.find(u => u.id === userId);
-            if (!user || user.isLoggedOff) return;
-
+            if (!user || user.isLoggedOff) { 
+                return;
+            }
+            // Clear Away status if they were Away
+            const wasAway = user.isAway;
+            user.isAway = false; // Must clear away status as they are now logging off
             user.isLoggedOff = true;
+            
             // ACTION: Always clear Last Assignment Time (LAT) on logout.
             const originalLAT = user.lastAssignmentTime;
             user.lastAssignmentTime = null;
@@ -270,6 +303,26 @@
             updateUI();
         }
 
+        
+        // --- Away Status Functions ---
+        function goAway(userId) {
+            const user = userList.find(u => u.id === userId);
+            if (!user || user.isLoggedOff || user.isAway) return;
+
+            user.isAway = true;
+            // Workload, LAT, and Login Date remain untouched.
+            logActivity(`**${user.name}** is now AWAY. Workload (${user.workItems.length}) retained, priority unchanged.`);
+            updateUI();
+        }
+
+        function goOnline(userId) {
+            const user = userList.find(u => u.id === userId);
+            if (!user || !user.isAway) return;
+
+            user.isAway = false;
+            logActivity(`**${user.name}** is now ONLINE.`);
+            updateUI();
+        }
         // --- Routing Functions ---
 
         function assignWork(user, type) {
@@ -295,8 +348,8 @@
 
         function pullWork(userId) {
             const user = userList.find(u => u.id === userId);
-            if (!user || user.isLoggedOff) { 
-                if (user && user.isLoggedOff) logActivity(`**${user.name}** is logged off and cannot PULL work.`, true);
+            if (!user || user.isLoggedOff || user.isAway) { // <-- ADD isAway check
+                logActivity(`**${user.name}** is unavailable and cannot PULL work.`, true);
                 return;
             }
             
@@ -321,8 +374,8 @@
 
             logActivity('--- **SYSTEM PUSH ROUTING** initiated (New work entered the system) ---');
 
-            // 1. Filter out users with full capacity AND users who are logged off
-            let candidates = userList.filter(u => u.workItems.length < MAX_CAPACITY && !u.isLoggedOff); 
+            // 1. Filter out users with full capacity AND users who are logged off OR who are away
+            let candidates = userList.filter(u => u.workItems.length < MAX_CAPACITY && !u.isLoggedOff && !u.isAway); 
 
             if (candidates.length === 0) {
                 logActivity('No logged-in users have spare capacity to receive PUSH work.', true);
