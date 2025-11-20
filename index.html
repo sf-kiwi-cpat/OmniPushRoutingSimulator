@@ -243,6 +243,9 @@
             if (!user || user.isLoggedOff) return;
 
             user.isLoggedOff = true;
+            // ACTION: Always clear Last Assignment Time (LAT) on logout.
+            const originalLAT = user.lastAssignmentTime;
+            user.lastAssignmentTime = null;
             
             // Check the checkbox setting
             if (shouldClearWorkOnLogout()) {
