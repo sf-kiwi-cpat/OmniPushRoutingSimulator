@@ -140,8 +140,8 @@
 
                 <hr>
 
-                <h3 id="legendToggle" style="cursor: pointer; user-select: none;">Key 🔑 <span>[ - Collapse ]</span></h3>
-                <div id="legendContent">
+                <h3 id="legendToggle" style="cursor: pointer; user-select: none;">Key 🔑 <span>[ + Expand ]</span></h3>
+                    <div id="legendContent" style="max-height: 0px; overflow: hidden; padding-top: 0px;">
                     <p><strong>LAT:</strong> Last Assignment Time</p>
                     <ul>
                         <li>Updated after **any work assignment** (PUSH or PULL).</li>
@@ -189,11 +189,12 @@
             const legendContentDiv = document.getElementById('legendContent');
 
             legendToggle.addEventListener('click', () => {
+                // Check if max-height is currently 0px (collapsed)
                 const isCollapsed = legendContentDiv.style.maxHeight === '0px';
 
                 if (isCollapsed) {
                     // Expand
-                    legendContentDiv.style.maxHeight = '500px'; // Set to a height greater than content
+                    legendContentDiv.style.maxHeight = '500px'; // Restore large height
                     legendToggle.querySelector('span').textContent = '[ - Collapse ]';
                 } else {
                     // Collapse
