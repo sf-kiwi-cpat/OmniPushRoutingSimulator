@@ -99,6 +99,15 @@
         .red { color: #dc3545; font-weight: bold; }
         .green { color: #28a745; font-weight: bold; }
         .muted { color: #6c757d; }
+
+        /* Add this to your existing CSS */
+        #legend ul {
+            margin-top: 5px;
+            padding-left: 20px;
+        }
+        #legend p {
+            margin-bottom: 5px;
+        }
     </style>
 </head>
 <body>
@@ -118,6 +127,21 @@
             <hr>
             <button id="pushWorkBtn" class="btn-push">SYSTEM PUSH Work ➡️</button>
             <p class="muted">Simulates new work entering the system.</p>
+            
+            <hr>
+            
+            <h2>Legend / Key 🔑</h2>
+            <div id="legend">
+                <p><strong>LAT:</strong> Last Assignment Time</p>
+                <ul>
+                    <li>Updated only during **PUSH** routing.</li>
+                    <li>Cleared when a user **Logs Off**.</li>
+                    <li>Used as a **tie-breaker** for PUSH priority (oldest LAT wins).</li>
+                </ul>
+                <p><strong>Login:</strong> Used as LAT if LAT is 'N/A'.</p>
+                <p><strong>Workload:</strong> Capacity Consumed (e.g., 2/3).</p>
+                <p><strong>Status:</strong> A user must be **ONLINE** to receive work.</p>
+            </div>
         </div>
 
         <div id="users-status">
