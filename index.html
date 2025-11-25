@@ -88,19 +88,29 @@
             gap: 5px;
         }
 
-        /* Log Styling */
+        /* Log Styling (Kept simple to stay visible) */
         #log {
             background: #fff; 
             padding: 15px; 
             border-radius: 8px; 
             box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
         }
+    
         .log-entry { margin-top: 5px; padding: 8px; border-left: 3px solid #007bff; background: #e9f7ff; font-size: 0.9em; }
-        .red { color: #dc3545; font-weight: bold; }
-        .green { color: #28a745; font-weight: bold; }
-        .muted { color: #6c757d; }
-
-        /* Add this to your existing CSS */
+    
+        /* Styles for Collapsible Legend */
+        #legendContent {
+            transition: max-height 0.3s ease-out, padding 0.3s ease-out;
+            overflow: hidden;
+            max-height: 500px; /* Large enough initial height to contain content */
+            padding-top: 5px;
+        }
+        
+        #legendToggle span {
+            font-size: 0.8em;
+            font-weight: normal;
+        }
+        
         #legend ul {
             margin-top: 5px;
             padding-left: 20px;
@@ -130,8 +140,8 @@
             
             <hr>
             
-            <h2>Legend / Key 🔑</h2>
-            <div id="legend">
+            <h2 id="legendToggle" style="cursor: pointer; user-select: none;">Legend / Key 🔑 <span>[ - Collapse ]</span></h2>
+            <div id="legendContent">
                 <p><strong>LAT:</strong> Last Assignment Time</p>
                 <ul>
                     <li>Updated only during **PUSH** routing.</li>
@@ -143,17 +153,17 @@
                 <p><strong>Status:</strong> A user must be **ONLINE** to receive work.</p>
             </div>
         </div>
-
+    
         <div id="users-status">
             <h2>User Status (<span id="userCount">0</span> users online)</h2>
             <div id="userList">
                 </div>
         </div>
     </div>
-
+    
     <div id="log">
         <h2>Activity Log 📜</h2>
-        </div>
+    </div>
 
     <script>
         const userList = [];
@@ -173,7 +183,27 @@
         function shouldClearWorkOnLogout() {
             return clearWorkCheckbox.checked;
         }
+
+        // --- Log Toggle Functionality (Updated for Legend) ---
+        const legendToggle = document.getElementById('legendToggle');
+        const legendContentDiv = document.getElementById('legendContent');
         
+        legendToggle.addEventListener('click', () => {
+            const isCollapsed = legendContentDiv.style.maxHeight === '0px';
+        
+            if (isCollapsed) {
+                // Expand
+                legendContentDiv.style.maxHeight = '500px'; // Set to a height greater than content
+                legendToggle.querySelector('span').textContent = '[ - Collapse ]';
+            } else {
+                // Collapse
+                legendContentDiv.style.maxHeight = '0px';
+                legendToggle.querySelector('span').textContent = '[ + Expand ]';
+            }
+        });
+        
+        // --- REVISED logActivity FUNCTION (Pointing back to #log div) ---
+        // Note: logDiv is the main container for the log.
         function logActivity(message, isError = false) {
             const entry = document.createElement('div');
             entry.className = 'log-entry';
