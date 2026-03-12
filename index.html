@@ -138,6 +138,16 @@
                     Clear work capacity on logout?
                 </label>
                 <hr>
+                <p style="margin: 10px 0 5px 0;"><strong>PUSH routing model:</strong></p>
+                <label style="display: block; margin: 3px 0;">
+                    <input type="radio" name="routingModel" value="leastActive" id="routingLeastActive">
+                    Least Active (lowest workload first)
+                </label>
+                <label style="display: block; margin: 3px 0;">
+                    <input type="radio" name="routingModel" value="mostAvailable" id="routingMostAvailable" checked>
+                    Most Available (most spare capacity first)
+                </label>
+                <hr>
                 <button id="pushWorkBtn" class="btn-push">SYSTEM PUSH Work ➡️</button>
                 <p class="muted">Simulates new work entering the system.</p>
 
@@ -424,13 +434,18 @@
                 updateUI();
             }
 
+            function getRoutingModel() {
+                return document.querySelector('input[name="routingModel"]:checked').value; // 'leastActive' | 'mostAvailable'
+            }
+
             function pushWork() {
                 if (userList.length === 0) {
                     logActivity('No users available to PUSH work to.', true);
                     return;
                 }
 
-                logActivity('--- **SYSTEM PUSH ROUTING** initiated (New work entered the system) ---');
+                const routingModel = getRoutingModel();
+                logActivity(`--- **SYSTEM PUSH ROUTING** initiated (Model: **${routingModel === 'leastActive' ? 'Least Active' : 'Most Available'}**) ---`);
 
                 // 1. Filter out users with full capacity AND users who are logged off OR who are away
                 let candidates = userList.filter(u => u.workItems.length < u.capacity && !u.isLoggedOff && !u.isAway); 
@@ -440,54 +455,57 @@
                     return;
                 }
 
-                // 2. Primary Order: Capacity Spare (Most spare capacity first)
-                candidates.sort((a, b) => {
-                    const capacityA = a.capacity - a.workItems.length;
-                    const capacityB = b.capacity - b.workItems.length;
-                    return capacityB - capacityA; // Descending: B - A
-                });
+                // 2. Primary sort by selected model
+                if (routingModel === 'leastActive') {
+                    // Least Active: lowest workload consumed first (ascending)
+                    candidates.sort((a, b) => a.workItems.length - b.workItems.length);
+                } else {
+                    // Most Available: most spare capacity first (descending)
+                    candidates.sort((a, b) => {
+                        const spareA = a.capacity - a.workItems.length;
+                        const spareB = b.capacity - b.workItems.length;
+                        return spareB - spareA;
+                    });
+                }
 
-                // 3. Secondary Order: Last Assignment Time (LAT) or Login Date (Oldest first)
+                // 3. Tie-breaker: LAT or Login Date (oldest first)
                 candidates.sort((a, b) => {
-                    const capacityA = a.capacity - a.workItems.length;
-                    const capacityB = b.capacity - b.workItems.length;
-
-                    // Only use LAT/Login logic to break ties in capacity
-                    if (capacityA !== capacityB) {
-                        return 0; // Capacity difference already handled by the first sort, do not reorder here.
-                    }
+                    const primaryA = routingModel === 'leastActive' ? a.workItems.length : (a.capacity - a.workItems.length);
+                    const primaryB = routingModel === 'leastActive' ? b.workItems.length : (b.capacity - b.workItems.length);
+                    if (primaryA !== primaryB) return 0;
 
                     const latA = a.lastAssignmentTime || a.loginDate;
                     const latB = b.lastAssignmentTime || b.loginDate;
-
-                    // Oldest time first: A - B (Date objects compare as timestamps)
                     return latA.getTime() - latB.getTime();
                 });
 
                 const selectedUser = candidates[0];
-                const topCapacity = selectedUser.capacity - candidates[0].workItems.length;
                 const effectiveTime = selectedUser.lastAssignmentTime || selectedUser.loginDate;
 
-                // Calculate the total number of users tied for the top capacity
-                const totalTiedUsers = candidates.filter(c => (c.capacity - c.workItems.length) === topCapacity).length;
+                const workloadConsumed = selectedUser.workItems.length;
+                const spareCapacity = selectedUser.capacity - selectedUser.workItems.length;
 
-                // Determine if a tie exists (i.e., if more than one user has the top capacity)
-                const capacityTie = totalTiedUsers > 1;
-
-                // Log the selection reason
                 let logMessage = `**${selectedUser.name}** was selected for PUSH work.`;
 
-                if (capacityTie) {
-                    const otherTiedUsers = totalTiedUsers - 1; // Subtract the selected user
-                    logMessage += `<br/>- **Reason 1 (Primary Tie):** Tied with ${otherTiedUsers} other user(s) for the most spare capacity (**${topCapacity}** units).`;
-                    logMessage += `<br/>- **Reason 2 (Tie-breaker):** Had the oldest effective assignment time: **${effectiveTime.toLocaleTimeString()}** (LAT or Login Date).`;
+                if (routingModel === 'leastActive') {
+                    const tiedCount = candidates.filter(c => c.workItems.length === workloadConsumed).length;
+                    if (tiedCount > 1) {
+                        logMessage += `<br/>- **Reason 1 (Primary Tie):** Tied with ${tiedCount - 1} other user(s) for lowest workload (**${workloadConsumed}** units).`;
+                    } else {
+                        logMessage += `<br/>- **Reason 1 (Primary):** Has the lowest workload (**${workloadConsumed}** units).`;
+                    }
                 } else {
-                    logMessage += `<br/>- **Reason 1 (Primary):** Has the most spare capacity (**${topCapacity}** units).`;
+                    const tiedCount = candidates.filter(c => (c.capacity - c.workItems.length) === spareCapacity).length;
+                    if (tiedCount > 1) {
+                        logMessage += `<br/>- **Reason 1 (Primary Tie):** Tied with ${tiedCount - 1} other user(s) for most spare capacity (**${spareCapacity}** units).`;
+                    } else {
+                        logMessage += `<br/>- **Reason 1 (Primary):** Has the most spare capacity (**${spareCapacity}** units).`;
+                    }
                 }
+                logMessage += `<br/>- **Tie-breaker:** Oldest effective time: **${effectiveTime.toLocaleTimeString()}** (LAT or Login).`;
 
                 logActivity(logMessage);
 
-                // Assign the work
                 assignWork(selectedUser, 'PUSH');
             }
 
