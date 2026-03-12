@@ -127,13 +127,16 @@
         <div class="container">
             <div id="controls">
                 <h2>Work & User Controls</h2>
+                <label style="display: block; margin: 5px 0;">
+                    Capacity for new user:
+                    <input type="number" id="newUserCapacity" min="1" max="20" value="3" style="width: 50px; margin-left: 5px;">
+                </label>
                 <button id="addUserBtn" class="btn-add-user">➕ Add User</button>
 
                 <label style="display: block; margin: 10px 0;">
                     <input type="checkbox" id="clearWorkOnLogout" checked>
                     Clear work capacity on logout?
                 </label>
-                <p class="muted">Max Capacity per user: **3** units</p>
                 <hr>
                 <button id="pushWorkBtn" class="btn-push">SYSTEM PUSH Work ➡️</button>
                 <p class="muted">Simulates new work entering the system.</p>
@@ -168,10 +171,10 @@
         <script>
             const userList = [];
             const MAX_USERS = 5;
-            const MAX_CAPACITY = 3;
             let workId = 1001;
 
             const addUserBtn = document.getElementById('addUserBtn');
+            const newUserCapacityInput = document.getElementById('newUserCapacity');
             const pushWorkBtn = document.getElementById('pushWorkBtn');
             const userListDiv = document.getElementById('userList');
             const logDiv = document.getElementById('log');
@@ -239,7 +242,8 @@
                     }
 
                     const capacityConsumed = user.workItems.length;
-                    const capacityClass = capacityConsumed === MAX_CAPACITY ? 'red' : (capacityConsumed === 0 ? 'green' : '');
+                    const userCapacity = user.capacity;
+                    const capacityClass = capacityConsumed === userCapacity ? 'red' : (capacityConsumed === 0 ? 'green' : '');
                     const latText = user.lastAssignmentTime ? user.lastAssignmentTime.toLocaleTimeString() : 'N/A';
 
                     let cardContent = `
@@ -248,7 +252,7 @@
                             ${statusText}
                         </div>
                         <div>
-                            <p>Workload: <span class="${capacityClass}">**${capacityConsumed}**</span> / ${MAX_CAPACITY}</p>
+                            <p>Workload: <span class="${capacityClass}">**${capacityConsumed}**</span> / ${userCapacity}</p>
                             <p>Work IDs: <span class="muted">${user.workItems.join(', ') || 'None'}</span></p>
                             <p>Login: ${user.loginDate.toLocaleTimeString()}</p>
                             <p>LAT: ${latText}</p>
@@ -304,18 +308,22 @@
             function addUser() {
                 if (userList.length >= MAX_USERS) return;
 
+                const capacity = Math.max(1, Math.min(20, parseInt(newUserCapacityInput.value, 10) || 3));
+                newUserCapacityInput.value = capacity; // Keep input in valid range
+
                 const newId = userList.length + 1;
                 const newUser = {
                     id: newId,
                     name: `User ${newId}`,
+                    capacity: capacity,
                     loginDate: new Date(),
                     lastAssignmentTime: null, // Null if never assigned work
                     workItems: [], // Array of work IDs
                     isLoggedOff: false,
-                    isAway: false // <-- ADD THIS NEW STATUS
+                    isAway: false
                 };
                 userList.push(newUser);
-                logActivity(`**${newUser.name}** has logged in (Simulated Login Date: ${newUser.loginDate.toLocaleTimeString()}).`);
+                logActivity(`**${newUser.name}** has logged in (Capacity: ${capacity} units). Simulated Login Date: ${newUser.loginDate.toLocaleTimeString()}.`);
                 updateUI();
             }
 
@@ -380,7 +388,7 @@
             }
             // --- Routing Functions ---
             function assignWork(user, type) {
-                if (user.workItems.length >= MAX_CAPACITY) {
+                if (user.workItems.length >= user.capacity) {
                     logActivity(`Cannot assign work to **${user.name}**. Capacity is full.`, true);
                     return false;
                 }
@@ -412,7 +420,7 @@
                 if (!user || user.workItems.length === 0) return;
 
                 const completedWorkId = user.workItems.pop();
-                logActivity(`**${user.name}** completed work **${completedWorkId}**. Capacity released: ${MAX_CAPACITY - user.workItems.length}.`);
+                logActivity(`**${user.name}** completed work **${completedWorkId}**. Capacity released: ${user.capacity - user.workItems.length}.`);
                 updateUI();
             }
 
@@ -425,7 +433,7 @@
                 logActivity('--- **SYSTEM PUSH ROUTING** initiated (New work entered the system) ---');
 
                 // 1. Filter out users with full capacity AND users who are logged off OR who are away
-                let candidates = userList.filter(u => u.workItems.length < MAX_CAPACITY && !u.isLoggedOff && !u.isAway); 
+                let candidates = userList.filter(u => u.workItems.length < u.capacity && !u.isLoggedOff && !u.isAway); 
 
                 if (candidates.length === 0) {
                     logActivity('No logged-in users have spare capacity to receive PUSH work.', true);
@@ -434,15 +442,15 @@
 
                 // 2. Primary Order: Capacity Spare (Most spare capacity first)
                 candidates.sort((a, b) => {
-                    const capacityA = MAX_CAPACITY - a.workItems.length;
-                    const capacityB = MAX_CAPACITY - b.workItems.length;
+                    const capacityA = a.capacity - a.workItems.length;
+                    const capacityB = b.capacity - b.workItems.length;
                     return capacityB - capacityA; // Descending: B - A
                 });
 
                 // 3. Secondary Order: Last Assignment Time (LAT) or Login Date (Oldest first)
                 candidates.sort((a, b) => {
-                    const capacityA = MAX_CAPACITY - a.workItems.length;
-                    const capacityB = MAX_CAPACITY - b.workItems.length;
+                    const capacityA = a.capacity - a.workItems.length;
+                    const capacityB = b.capacity - b.workItems.length;
 
                     // Only use LAT/Login logic to break ties in capacity
                     if (capacityA !== capacityB) {
@@ -457,11 +465,11 @@
                 });
 
                 const selectedUser = candidates[0];
-                const topCapacity = MAX_CAPACITY - candidates[0].workItems.length;
+                const topCapacity = selectedUser.capacity - candidates[0].workItems.length;
                 const effectiveTime = selectedUser.lastAssignmentTime || selectedUser.loginDate;
 
                 // Calculate the total number of users tied for the top capacity
-                const totalTiedUsers = candidates.filter(c => (MAX_CAPACITY - c.workItems.length) === topCapacity).length;
+                const totalTiedUsers = candidates.filter(c => (c.capacity - c.workItems.length) === topCapacity).length;
 
                 // Determine if a tie exists (i.e., if more than one user has the top capacity)
                 const capacityTie = totalTiedUsers > 1;
